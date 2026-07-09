@@ -1,8 +1,10 @@
 # SkyBooking ✈️
 
-[English](#english) | [Русский](#russian)
+[English](#english-version) | [Русский](#russian-version)
 
 ---
+
+<div id="english-version"></div>
 
 ## English
 
