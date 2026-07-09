@@ -1,6 +1,6 @@
 # SkyBooking ✈️
 
-[English](#english) | [Русский](#русский)
+[English](#english) | [Русский](#russian)
 
 ---
 
