@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SkyBooking — Найди свой рейс</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          navy: {
+            50: '#eef2fb', 100: '#dde5f7', 600: '#274690',
+            700: '#1e3a8a', 800: '#182e6e', 900: '#122252',
+          }
+        },
+        boxShadow: {
+          soft: '0 10px 30px -10px rgba(30,58,138,0.25)',
+          card: '0 8px 24px -8px rgba(30,58,138,0.18)',
+        },
+        keyframes: {
+          fadeInUp: {
+            '0%': { opacity: 0, transform: 'translateY(24px)' },
+            '100%': { opacity: 1, transform: 'translateY(0)' },
+          },
+          shimmer: {
+            '0%': { backgroundPosition: '-400px 0' },
+            '100%': { backgroundPosition: '400px 0' },
+          }
+        },
+        animation: {
+          fadeInUp: 'fadeInUp 0.6s ease forwards',
+          shimmer: 'shimmer 1.4s infinite linear',
+        }
+      }
+    }
+  }
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  body { font-family: 'Inter', sans-serif; }
+  h1, h2, h3, .font-display { font-family: 'Poppins', sans-serif; }
+
+  .reveal { opacity: 0; transform: translateY(30px); transition: opacity 0.7s ease, transform 0.7s ease; }
+  .reveal.is-visible { opacity: 1; transform: translateY(0); }
+
+  .skeleton {
+    background: linear-gradient(90deg, #e5e9f5 25%, #f2f4fa 37%, #e5e9f5 63%);
+    background-size: 800px 100%;
+  }
+
+  .search-btn:hover { transform: scale(1.03); }
+  .search-btn:active { transform: scale(0.98); }
+
+  .dest-tile { transition: transform 0.35s ease, box-shadow 0.35s ease; }
+  .dest-tile:hover { transform: translateY(-6px); box-shadow: 0 20px 40px -15px rgba(30,58,138,0.35); }
+
+  .flight-card { transition: transform 0.3s ease, box-shadow 0.3s ease; }
+  .flight-card:hover { transform: translateY(-4px); box-shadow: 0 16px 32px -12px rgba(30,58,138,0.3); }
+
+  .nav-link { position: relative; }
+  .nav-link.active { color: #1e3a8a; }
+  .nav-link.active::after {
+    content: ''; position: absolute; left: 0; right: 0; bottom: -6px;
+    height: 2px; background: #1e3a8a; border-radius: 1px;
+  }
+
+  .screen { display: none; }
+  .screen.active { display: block; }
+
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+</style>
+</head>
+<body class="bg-white text-navy-900 antialiased">
+
+<!-- HEADER / NAV -->
+<header class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-navy-100">
+  <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+    <a href="#" data-nav="search" class="nav-trigger flex items-center gap-2 font-display text-xl font-semibold text-navy-700">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2.5 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z" fill="#1e3a8a"/>
+      </svg>
+      SkyBooking
+    </a>
+    <nav class="hidden md:flex items-center gap-8 text-sm font-medium text-navy-800">
+      <a href="#" data-nav="search" class="nav-trigger nav-link active hover:text-navy-600 transition">Поиск рейсов</a>
+      <a href="#" data-nav="destinations" class="nav-trigger nav-link hover:text-navy-600 transition">Направления</a>
+      <a href="#" data-nav="bookings" class="nav-trigger nav-link hover:text-navy-600 transition">Мои бронирования</a>
+      <a href="#" data-nav="help" class="nav-trigger nav-link hover:text-navy-600 transition">Помощь</a>
+    </nav>
+    <div class="flex items-center gap-2 text-xs font-medium text-navy-800/60">
+      <span id="api-status-dot" class="status-dot bg-gray-300"></span>
+      <span id="api-status-text">Проверка сервера…</span>
+    </div>
+  </div>
+</header>
+
+<!-- ============ SCREEN 1: SEARCH ============ -->
+<section id="screen-search" class="screen active relative overflow-hidden bg-gradient-to-b from-navy-50 to-white">
+  <div class="max-w-7xl mx-auto px-6 pt-16 pb-24">
+    <div class="text-center max-w-2xl mx-auto mb-12 reveal">
+      <span class="inline-block bg-navy-100 text-navy-700 text-xs font-semibold px-4 py-1.5 rounded-full mb-5 tracking-wide uppercase">Более 500 авиакомпаний</span>
+      <h1 class="font-display text-4xl sm:text-5xl font-semibold text-navy-900 leading-tight mb-4">
+        Летите дальше.<br class="hidden sm:block"> Платите меньше.
+      </h1>
+      <p class="text-navy-800/70 text-lg">Сравнивайте цены сотен авиакомпаний за секунды и находите идеальный рейс.</p>
+    </div>
+
+    <div class="reveal bg-white rounded-2xl shadow-soft border border-navy-100 p-6 sm:p-8 max-w-5xl mx-auto">
+      <form id="search-form" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="flex flex-col gap-1.5">
+          <label class="text-xs font-semibold text-navy-800/60 uppercase tracking-wide">Откуда</label>
+          <input id="input-from" type="text" value="Москва" required
+                 class="w-full px-4 py-3 rounded-xl border border-navy-100 bg-navy-50/50 focus:outline-none focus:ring-2 focus:ring-navy-700/40 text-sm font-medium text-navy-900" placeholder="Город вылета">
+        </div>
+        <div class="flex flex-col gap-1.5">
+          <label class="text-xs font-semibold text-navy-800/60 uppercase tracking-wide">Куда</label>
+          <input id="input-to" type="text" value="Стамбул" required
+                 class="w-full px-4 py-3 rounded-xl border border-navy-100 bg-navy-50/50 focus:outline-none focus:ring-2 focus:ring-navy-700/40 text-sm font-medium text-navy-900" placeholder="Город прилёта">
+        </div>
+        <div class="flex flex-col gap-1.5">
+          <label class="text-xs font-semibold text-navy-800/60 uppercase tracking-wide">Дата вылета</label>
+          <input id="input-date" type="date"
+                 class="w-full px-4 py-3 rounded-xl border border-navy-100 bg-navy-50/50 focus:outline-none focus:ring-2 focus:ring-navy-700/40 text-sm font-medium text-navy-900">
+        </div>
+        <div class="flex flex-col gap-1.5">
+          <label class="text-xs font-semibold text-navy-800/60 uppercase tracking-wide">Пассажиры</label>
+          <select id="input-passengers" class="w-full px-4 py-3 rounded-xl border border-navy-100 bg-navy-50/50 focus:outline-none focus:ring-2 focus:ring-navy-700/40 text-sm font-medium text-navy-900 appearance-none">
+            <option>1 пассажир</option>
+            <option>2 пассажира</option>
+            <option>3 пассажира</option>
+            <option>4+ пассажиров</option>
+          </select>
+        </div>
+        <button type="submit" id="search-btn" class="search-btn md:col-span-4 mt-2 bg-navy-700 text-white font-semibold py-3.5 rounded-xl hover:bg-navy-800 transition-all duration-200 shadow-soft flex items-center justify-center gap-2">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="white" stroke-width="2"/><path d="M21 21l-4.3-4.3" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
+          Найти рейсы
+        </button>
+      </form>
+    </div>
+
+    <div id="source-banner" class="hidden max-w-5xl mx-auto mt-6 text-sm px-4 py-2.5 rounded-xl border"></div>
+
+    <div id="loading" class="hidden max-w-5xl mx-auto mt-8 space-y-4">
+      <div class="skeleton animate-shimmer h-28 rounded-2xl"></div>
+      <div class="skeleton animate-shimmer h-28 rounded-2xl"></div>
+      <div class="skeleton animate-shimmer h-28 rounded-2xl"></div>
+    </div>
+
+    <div id="results" class="hidden max-w-5xl mx-auto mt-4 space-y-4"></div>
+    <div id="no-results" class="hidden max-w-5xl mx-auto mt-8 text-center text-navy-800/60 py-10">
+      Рейсы по этому направлению не найдены. Попробуйте другой город или дату.
+    </div>
+  </div>
+</section>
+
+<!-- ============ SCREEN 2: DESTINATIONS ============ -->
+<section id="screen-destinations" class="screen max-w-7xl mx-auto px-6 py-20">
+  <div class="reveal text-center max-w-xl mx-auto mb-12">
+    <h2 class="font-display text-3xl font-semibold text-navy-900 mb-3">Популярные направления</h2>
+    <p class="text-navy-800/70">Вдохновитесь одним из самых востребованных направлений этого сезона</p>
+  </div>
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+    <div class="dest-tile reveal rounded-2xl overflow-hidden shadow-card cursor-pointer relative h-64" data-city="Стамбул">
+      <img src="https://images.unsplash.com/photo-1524231757912-21f4fe3a7200?w=600&q=80" class="w-full h-full object-cover" alt="Стамбул">
+      <div class="absolute inset-0 bg-gradient-to-t from-navy-900/80 via-navy-900/10 to-transparent"></div>
+      <div class="absolute bottom-4 left-4 text-white">
+        <p class="font-display font-semibold text-lg">Стамбул</p><p class="text-sm text-white/80">от 8 900 ₽</p>
+      </div>
+    </div>
+    <div class="dest-tile reveal rounded-2xl overflow-hidden shadow-card cursor-pointer relative h-64" data-city="Дубай">
+      <img src="https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=600&q=80" class="w-full h-full object-cover" alt="Дубай">
+      <div class="absolute inset-0 bg-gradient-to-t from-navy-900/80 via-navy-900/10 to-transparent"></div>
+      <div class="absolute bottom-4 left-4 text-white">
+        <p class="font-display font-semibold text-lg">Дубай</p><p class="text-sm text-white/80">от 15 400 ₽</p>
+      </div>
+    </div>
+    <div class="dest-tile reveal rounded-2xl overflow-hidden shadow-card cursor-pointer relative h-64" data-city="Алматы">
+      <img src="https://images.unsplash.com/photo-1621243804936-775306a8f2e3?w=600&q=80" class="w-full h-full object-cover" alt="Алматы">
+      <div class="absolute inset-0 bg-gradient-to-t from-navy-900/80 via-navy-900/10 to-transparent"></div>
+      <div class="absolute bottom-4 left-4 text-white">
+        <p class="font-display font-semibold text-lg">Алматы</p><p class="text-sm text-white/80">от 12 000 ₸</p>
+      </div>
+    </div>
+    <div class="dest-tile reveal rounded-2xl overflow-hidden shadow-card cursor-pointer relative h-64" data-city="Бали">
+      <img src="https://images.unsplash.com/photo-1490642914619-7955a3fd483c?w=600&q=80" class="w-full h-full object-cover" alt="Бали">
+      <div class="absolute inset-0 bg-gradient-to-t from-navy-900/80 via-navy-900/10 to-transparent"></div>
+      <div class="absolute bottom-4 left-4 text-white">
+        <p class="font-display font-semibold text-lg">Бали</p><p class="text-sm text-white/80">от 34 700 ₽</p>
+      </div>
+    </div>
+  </div>
+  <p class="text-center text-sm text-navy-800/50 mt-8">Нажмите на направление, чтобы сразу подставить его в поиск</p>
+</section>
+
+<!-- ============ SCREEN 3: BOOKINGS ============ -->
+<section id="screen-bookings" class="screen max-w-4xl mx-auto px-6 py-20 min-h-[60vh]">
+  <div class="reveal text-center mb-10">
+    <h2 class="font-display text-3xl font-semibold text-navy-900 mb-3">Мои бронирования</h2>
+    <p class="text-navy-800/70">Здесь появятся рейсы, которые вы забронируете</p>
+  </div>
+  <div id="bookings-list" class="space-y-4"></div>
+  <div id="bookings-empty" class="reveal text-center border-2 border-dashed border-navy-100 rounded-2xl py-16 text-navy-800/50">
+    <p class="font-display text-lg text-navy-900 mb-1">Пока пусто</p>
+    <p class="text-sm">Найдите рейс на вкладке «Поиск рейсов» и нажмите «Выбрать»</p>
+  </div>
+</section>
+
+<!-- ============ SCREEN 4: HELP ============ -->
+<section id="screen-help" class="screen max-w-4xl mx-auto px-6 py-20 min-h-[60vh]">
+  <div class="reveal text-center mb-10">
+    <h2 class="font-display text-3xl font-semibold text-navy-900 mb-3">Помощь</h2>
+    <p class="text-navy-800/70">Ответы на частые вопросы</p>
+  </div>
+  <div class="reveal space-y-4">
+    <details class="bg-navy-50/60 rounded-2xl p-5 group">
+      <summary class="font-semibold text-navy-900 cursor-pointer">Откуда берутся результаты поиска?</summary>
+      <p class="mt-2 text-sm text-navy-800/70">Мы отправляем запрос на наш сервер (Spring Boot + база данных). Если сервер недоступен, показываем демонстрационные примеры рейсов, чтобы вы могли увидеть, как выглядит интерфейс.</p>
+    </details>
+    <details class="bg-navy-50/60 rounded-2xl p-5 group">
+      <summary class="font-semibold text-navy-900 cursor-pointer">Как отменить бронирование?</summary>
+      <p class="mt-2 text-sm text-navy-800/70">Откройте вкладку «Мои бронирования» и нажмите «Отменить» рядом с нужным рейсом.</p>
+    </details>
+    <details class="bg-navy-50/60 rounded-2xl p-5 group">
+      <summary class="font-semibold text-navy-900 cursor-pointer">Какие способы оплаты доступны?</summary>
+      <p class="mt-2 text-sm text-navy-800/70">В этой демонстрационной версии оплата не подключена — бронирование сохраняется только локально в браузере.</p>
+    </details>
+  </div>
+</section>
+
+<footer class="bg-navy-900 text-white/70 py-10">
+  <div class="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+    <p class="font-display text-white font-semibold">SkyBooking</p>
+    <p class="text-sm">© 2026 SkyBooking. Все права защищены.</p>
+  </div>
+</footer>
+
+<script>
+  // ============ CONFIG ============
+  const API_BASE_URL = 'http://localhost:8080/api/flights';
+
+  // ============ MOCK FALLBACK DATA ============
+  const MOCK_FLIGHTS = [
+    { airline: 'Turkish Airlines', flightNumber: 'TK-412', departureFrom: 'Москва', arrivalTo: 'Стамбул', duration: '3ч 25м', price: 8900 },
+    { airline: 'Aeroflot',         flightNumber: 'SU-208', departureFrom: 'Москва', arrivalTo: 'Стамбул', duration: '3ч 40м', price: 10200 },
+    { airline: 'Pegasus Airlines', flightNumber: 'PC-771', departureFrom: 'Москва', arrivalTo: 'Стамбул', duration: '5ч 45м', price: 6450 },
+  ];
+
+  const AIRLINE_LOGOS = {
+    'Turkish Airlines': 'https://images.kiwi.com/airlines/64/TK.png',
+    'Aeroflot': 'https://images.kiwi.com/airlines/64/SU.png',
+    'Pegasus Airlines': 'https://images.kiwi.com/airlines/64/PC.png',
+    'Air Astana': 'https://images.kiwi.com/airlines/64/KC.png',
+    'SCAT Airlines': 'https://images.kiwi.com/airlines/64/DV.png',
+    'FlyDubai': 'https://images.kiwi.com/airlines/64/FZ.png',
+    'Emirates': 'https://images.kiwi.com/airlines/64/EK.png',
+  };
+
+  function logoFor(airline) {
+    return AIRLINE_LOGOS[airline] || 'https://placehold.co/48x48/eef2fb/1e3a8a?text=%E2%9C%88';
+  }
+
+  // ============ NAVIGATION (SPA routing) ============
+  const screens = ['search', 'destinations', 'bookings', 'help'];
+
+  function showScreen(name) {
+    screens.forEach(s => {
+      document.getElementById('screen-' + s).classList.toggle('active', s === name);
+    });
+    document.querySelectorAll('.nav-link').forEach(link => {
+      link.classList.toggle('active', link.dataset.nav === name);
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  document.querySelectorAll('.nav-trigger').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.preventDefault();
+      showScreen(el.dataset.nav);
+    });
+  });
+
+  document.querySelectorAll('.dest-tile').forEach(tile => {
+    tile.addEventListener('click', () => {
+      document.getElementById('input-to').value = tile.dataset.city;
+      showScreen('search');
+    });
+  });
+
+  // ============ SCROLL REVEAL ============
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('is-visible');
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.15 });
+  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+  // ============ API STATUS CHECK ============
+  const statusDot = document.getElementById('api-status-dot');
+  const statusText = document.getElementById('api-status-text');
+
+  async function checkApiStatus() {
+    try {
+      const res = await fetch(`${API_BASE_URL}/search?from=ping&to=ping`, { signal: AbortSignal.timeout(2500) });
+      if (res.ok || res.status === 200) {
+        statusDot.className = 'status-dot bg-green-500';
+        statusText.textContent = 'Сервер онлайн';
+        return true;
+      }
+      throw new Error('bad status');
+    } catch (err) {
+      statusDot.className = 'status-dot bg-red-400';
+      statusText.textContent = 'Демо-режим (сервер офлайн)';
+      return false;
+    }
+  }
+  checkApiStatus();
+
+  // ============ FLIGHT SEARCH: fetch with fallback ============
+  async function fetchFlights(from, to) {
+    const url = `${API_BASE_URL}/search?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+    try {
+      const response = await fetch(url, { method: 'GET', signal: AbortSignal.timeout(5000) });
+
+      if (!response.ok) {
+        throw new Error(`Сервер ответил статусом ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (!Array.isArray(data)) {
+        throw new Error('Некорректный формат ответа сервера');
+      }
+
+      return { flights: data, source: 'server' };
+
+    } catch (error) {
+      // Бэкенд недоступен, вернулась ошибка сети, таймаут или невалидный JSON —
+      // в любом из этих случаев сайт не должен падать, переключаемся на заглушку.
+      console.warn('API недоступен, используем демо-данные:', error.message);
+
+      const mocked = MOCK_FLIGHTS
+        .filter(f =>
+          f.departureFrom.toLowerCase().includes(from.toLowerCase()) ||
+          from.toLowerCase().includes(f.departureFrom.toLowerCase()) ||
+          from.trim() === ''
+        )
+        .map(f => ({ ...f, arrivalTo: to || f.arrivalTo }));
+
+      return { flights: mocked.length ? mocked : MOCK_FLIGHTS, source: 'mock' };
+    }
+  }
+
+  function renderFlightCard(f, index) {
+    const price = typeof f.price === 'number' ? f.price : parseFloat(f.price);
+    const priceLabel = isNaN(price) ? f.price : price.toLocaleString('ru-RU') + ' ₽';
+    return `
+    <div class="flight-card bg-white rounded-2xl border border-navy-100 shadow-card p-5 sm:p-6 flex flex-col sm:flex-row items-center gap-5"
+         style="animation: fadeInUp 0.6s ease forwards; animation-delay: ${index * 0.12}s; opacity:0;">
+      <img src="${logoFor(f.airline)}" alt="${f.airline}" class="w-12 h-12 rounded-xl object-contain bg-navy-50 p-2 flex-shrink-0"
+           onerror="this.src='https://placehold.co/48x48/eef2fb/1e3a8a?text=%E2%9C%88'">
+      <div class="flex-1 w-full">
+        <p class="font-semibold text-navy-900">${f.airline}</p>
+        <p class="text-xs text-navy-800/50">Рейс ${f.flightNumber || '—'}</p>
+      </div>
+      <div class="flex items-center gap-4 flex-1 w-full justify-center">
+        <div class="text-center">
+          <p class="font-display font-semibold text-navy-900">${f.departureFrom}</p>
+        </div>
+        <div class="flex flex-col items-center flex-1 min-w-[60px]">
+          <p class="text-xs text-navy-800/50 mb-1">${f.duration || ''}</p>
+          <div class="w-full h-px bg-navy-100 relative">
+            <div class="absolute right-0 -top-1 w-2 h-2 rounded-full bg-navy-700"></div>
+          </div>
+        </div>
+        <div class="text-center">
+          <p class="font-display font-semibold text-navy-900">${f.arrivalTo}</p>
+        </div>
+      </div>
+      <div class="flex flex-col items-end flex-shrink-0 w-full sm:w-auto">
+        <p class="font-display text-xl font-semibold text-navy-700">${priceLabel}</p>
+        <button class="book-btn mt-1 text-sm font-semibold text-white bg-navy-700 hover:bg-navy-800 px-4 py-2 rounded-xl transition"
+                data-flight='${JSON.stringify(f).replace(/'/g, "&apos;")}'>Выбрать</button>
+      </div>
+    </div>`;
+  }
+
+  const form = document.getElementById('search-form');
+  const loading = document.getElementById('loading');
+  const results = document.getElementById('results');
+  const noResults = document.getElementById('no-results');
+  const sourceBanner = document.getElementById('source-banner');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const from = document.getElementById('input-from').value.trim();
+    const to = document.getElementById('input-to').value.trim();
+
+    results.classList.add('hidden');
+    noResults.classList.add('hidden');
+    sourceBanner.classList.add('hidden');
+    results.innerHTML = '';
+    loading.classList.remove('hidden');
+
+    const minDelay = new Promise(resolve => setTimeout(resolve, 1500));
+    const [{ flights, source }] = await Promise.all([fetchFlights(from, to), minDelay]);
+
+    loading.classList.add('hidden');
+
+    if (source === 'server') {
+      statusDot.className = 'status-dot bg-green-500';
+      statusText.textContent = 'Сервер онлайн';
+      sourceBanner.className = 'max-w-5xl mx-auto mt-6 text-sm px-4 py-2.5 rounded-xl border bg-green-50 border-green-200 text-green-700';
+      sourceBanner.textContent = '✓ Данные загружены из базы SkyBooking (Spring Boot)';
+    } else {
+      statusDot.className = 'status-dot bg-red-400';
+      statusText.textContent = 'Демо-режим (сервер офлайн)';
+      sourceBanner.className = 'max-w-5xl mx-auto mt-6 text-sm px-4 py-2.5 rounded-xl border bg-amber-50 border-amber-200 text-amber-700';
+      sourceBanner.textContent = '⚠ Сервер недоступен — показаны демонстрационные рейсы';
+    }
+    sourceBanner.classList.remove('hidden');
+
+    if (!flights || flights.length === 0) {
+      noResults.classList.remove('hidden');
+      return;
+    }
+
+    results.innerHTML = flights.map((f, i) => renderFlightCard(f, i)).join('');
+    results.classList.remove('hidden');
+    results.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
+
+  // ============ BOOKINGS (stored in memory for this session) ============
+  let bookings = [];
+  const bookingsList = document.getElementById('bookings-list');
+  const bookingsEmpty = document.getElementById('bookings-empty');
+
+  function renderBookings() {
+    if (bookings.length === 0) {
+      bookingsEmpty.classList.remove('hidden');
+      bookingsList.innerHTML = '';
+      return;
+    }
+    bookingsEmpty.classList.add('hidden');
+    bookingsList.innerHTML = bookings.map((f, idx) => `
+      <div class="flex items-center justify-between bg-white border border-navy-100 rounded-2xl p-5 shadow-card">
+        <div>
+          <p class="font-semibold text-navy-900">${f.departureFrom} → ${f.arrivalTo}</p>
+          <p class="text-xs text-navy-800/50">${f.airline} · Рейс ${f.flightNumber || '—'}</p>
+        </div>
+        <div class="flex items-center gap-4">
+          <p class="font-display font-semibold text-navy-700">${(typeof f.price === 'number' ? f.price.toLocaleString('ru-RU') : f.price)} ₽</p>
+          <button class="cancel-btn text-sm font-medium text-red-500 hover:text-red-600" data-idx="${idx}">Отменить</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('.book-btn')) {
+      const btn = e.target.closest('.book-btn');
+      const flight = JSON.parse(btn.dataset.flight.replace(/&apos;/g, "'"));
+      bookings.push(flight);
+      renderBookings();
+      showScreen('bookings');
+    }
+    if (e.target.closest('.cancel-btn')) {
+      const idx = parseInt(e.target.closest('.cancel-btn').dataset.idx, 10);
+      bookings.splice(idx, 1);
+      renderBookings();
+    }
+  });
+
+  renderBookings();
+</script>
+
+</body>
+</html>
